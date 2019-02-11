@@ -1,6 +1,6 @@
 # coding=utf-8
 ##########################################################
-#  pyFatturaPA                                           #
+#  pyFatturaPA 0.1                                       #
 #--------------------------------------------------------#
 #   Quick generation of FatturaPA eInvoice XML files !   #
 #--------------------------------------------------------#
@@ -19,6 +19,7 @@ import re
 
 __VERSION = "0.1"
 CONF_FILE = "pyFatturaPA.conf"
+VAT_DEFAULT = 22.0
 
 
 def check_config():
@@ -28,15 +29,16 @@ def check_config():
 
 def enter_org_data():
 	print('\n')
-	answer = input("P.IVA individuale? [S]ì/[N]o ")
-	if answer and answer.lower()[0]=='n':	orgname = input("Ragione sociale:  ")
-	else:	orgname = tuple([input("Nome:  "), input("Cognome:  ")])
+	answer = input("P.IVA individuale? Sì/[N]o ")
+	if answer and answer.lower()[0]=='s':	orgname = tuple([input("Nome:  "), input("Cognome:  ")])
+	else:	orgname = input("Ragione sociale:  ")
 	VATit = input("Partita IVA:  ")
 	CF = None
 	while CF==None:
 		CF = input("Codice Fiscale (se applicabile):  ")
 		if CF=="":	break
-		elif not (CFre1.match(CF) or CFre1.match(CF)):	CF = None
+		elif CF and CFre.match(CF) or (10<len(CF)<17 and CF.isalnum()):	break
+		CF = None
 	email = None
 	while email==None:
 		email = input("Indirizzo email (obbligatoriamente PEC se in Italia):  ")
@@ -57,20 +59,18 @@ def enter_org_data():
 	if addr['country']=="IT":
 		while not (len(addr['zip'])==5 and addr['zip'].isnumeric()):
 			addr['zip'] = input("CAP (5 cifre):  ").upper()
+		while not addr['prov']:
+			prov = input("Provincia (sigla a 2 cifre):  ").upper()
+			if prov in PROVINCES:	addr['prov'] = prov
 		while not addr['muni']:
 			comune = input("Comune (nome completo):  ")
-			for prov in PROVINCES.keys():
-				if comune.upper() in [m.upper() for m in PROVINCES[prov]]:
-					print("Comune identificato nella sua provincia: %s"%prov)
-					addr['prov'], addr['muni'] = prov, comune.upper()
-					break
+			if comune:	addr['muni'] = comune
 	else:
 		print("\nATTENZIONE!: Questa versione di supporta solo fatture da/per enti con sede in Italia.")
 		sys.exit(-1)
 	while not addr['addr']:
 		addr['addr'] = input("Indirizzo (via/piazza/..., numero civico):  ")
-	RF = _enum_selection(RegimeFiscale_t, "regime fiscale", 'RF01')
-	return {	'name':orgname, 'VAT#':('IT',VATit), 'CF':CF, 'Id':Id, 'addr':addr, 'email':email, 'RegimeFiscale':RF	}
+	return {	'name':orgname, 'VAT#':('IT',VATit), 'CF':CF, 'Id':Id, 'addr':addr, 'email':email }
 
 
 def parse_config():
@@ -81,6 +81,7 @@ def parse_config():
 	del clients["USER"]
 	for org in clients.keys():
 		if type(org)!=type("") or len(org)!=3 or not org.isalnum():	return False, False
+	print(clients)
 	return (USER, clients)
 
 
@@ -88,53 +89,72 @@ def pretty_dict_print(dictname, D):
 	return json.dumps({dictname:D}, indent='\t')
 
 
-def add_company():
+def write_config(user, clients, append):
+	if append:	mod = 'a'
+	else:	mod = 'w'
+	try:	conf = open(CONF_FILE,mod)
+	except:
+		print(" * ERROR!: Unable to create/modify database \"%s\"."%os.path.abspath(CONF_GILE))
+		sys.exit(-8)
+	clients["USER"] = user
+	#for client in clients.keys():
+	#	conf.write(pretty_dict_print(client,clients[client]))
+	conf.write(json.dumps(clients, indent='\t'))
+	conf.close()
+
+
+
+def	add_company():
 	if not os.path.exists(CONF_FILE):
 		print("ERROR!: Il file di configurazione di pyFatturaPA (%s) non è stato trovato. L'utente va prima inizializzato."%CONF_FILE)
 		sys.exit(-2)
-	USER, clients = parse_config()
-	if not USER:	return False
+	user, clients = parse_config()
+	if not user:	return False
 	orgname = ""
 	while len(orgname)!=3 or not orgname.isalnum() or orgname in clients.keys():
 		orgname = input("Sigla di 3 caratteri alfanumerici per la nuova organizzazione:  ").upper()
 	new_client = enter_org_data()
 	clients[orgname] = new_client
-	return create_config(USER, clients)
+	write_config(user, clients, append=True)
 
 
-def create_config(user=None, clients={}):
-	conf = open(CONF_FILE,"w")
-	if not user:
-		print("Inizializzazione del database: inserimento dati dell'UTENTE.")
-		user = enter_org_data()
-		answ = None
-		while not answ:
-			answ = input("L'utente (in qualità di cedente/prestatore) è soggetto a ritenuta? [S]ì/No ")
-			if (not answ) or answ[0].lower()=="s":
-				user['ritenuta'], aliquota, causale = {'aliquota':None, 'causale':None}
-				if type(user['name'])==type(""):	user['ritenuta']['tipo'] = 'RT02'
-				else:	user['ritenuta']['tipo'] = 'RT01'
-				while not user['ritenuta']['aliquota'] or user['ritenuta']['aliquota']<0. or user['ritenuta']['aliquota']>100.:
-					user['ritenuta']['aliquota'] = eval(input("Inserire % aliquota della ritenuta (e.g. \"22.0\"):  "))
-				while not user['ritenuta']['causale'] or user['ritenuta']['causale'] not in Causale_Pagamento_t:
-					user['ritenuta']['causale'] = input("Inserire sigla della causale di pagamento ('A...Z' ovvero 'L|M|O|V1':  ").upper()
-			elif answ and answ[0].lower()=="n":	user['ritenuta'] = None
-			else: answ = None;	continue
+def create_config():
+	print("Inizializzazione del database: inserimento dati dell'UTENTE.")
+	user = enter_org_data()
+	answ = None
+	user['RegimeFiscale'] = _enum_selection(RegimeFiscale_t, "regime fiscale (ex DPR 633/1972)", 'RF01')
+	while not answ:
+		answ = input("L'utente (in qualità di cedente/prestatore) è soggetto a ritenuta? [S]ì/No ")
+		if (not answ) or answ[0].lower()=="s":
+			answ = "Sì"
+			user['ritenuta'] = {'aliquota':None, 'causale':None}
+			if type(user['name'])==type(""):	user['ritenuta']['tipo'] = 'RT02'
+			else:	user['ritenuta']['tipo'] = 'RT01'
+			while not user['ritenuta']['aliquota'] or user['ritenuta']['aliquota']<0 or user['ritenuta']['aliquota']>100:
+				aliq = input("Inserire %% aliquota della ritenuta (e.g. \"%.2f\"):  "%VAT_DEFAULT)
+				if aliq.isnumeric():	user['ritenuta']['aliquota'] = eval(aliq)
+				else:	user['ritenuta']['aliquota'] = VAT_DEFAULT
+			while not user['ritenuta']['causale'] or user['ritenuta']['causale'] not in CausalePagamento_t:
+				user['ritenuta']['causale'] = input("Inserire sigla della causale di pagamento ('A...Z' ovvero 'L|M|O|V1':  ").upper()
+		elif answ and answ[0].lower()=="n":
+			del user['ritenuta']
+			answ = None;	break
+		else: answ = None;	continue
+	answ = None
 	while not answ:
 		answ = input("Si è iscritti ad una cassa previdenziale? [S]ì/No ")
 		if (not answ) or answ[0].lower()=="s":
+			answ = "Sì"
 			user['cassa'] = {
-				'tipo':_enum_selection(TipoCassa_t, "cassa di appartenenza", 'TP22'),
+				'tipo':_enum_selection(TipoCassa_t, "cassa di appartenenza", 'TC22'),
 				'aliquota':eval(input("Indicare l'aliquota contributo cassa:  ")),
-				'IVA':22.00
+				'IVA':VAT_DEFAULT
 			}
-		elif answ and answ[0].lower()=="n":	user['cassa'] = None
+		elif answ and answ[0].lower()=="n":
+			del user['cassa']
+			answ = None;	break
 		else: answ = None;	continue
-	clients["USER"] = user
-	for client in clients.keys():
-		conf.write(pretty_dict_print(client,clients[client]))
-	conf.close()
-	return True
+	write_config(user, {}, append=False)
 
 def FatturaPA_assemble(user, client, data):
 	#####	FATTURA ELETTRONICA HEADER
@@ -295,18 +315,20 @@ def _enum_selection(enumtype, enumname=None, default=None):
 	if not enumname:	question = "Indicare la selezione numerica sopra elencata"
 	else:	question = "Prego selezionare %s"%enumname
 	keys = sorted(list(enumtype.keys()))
-	if default and default in keys:	question += " (default: %s)"%default
+	for n in range(1,len(keys)+1):
+		print(("  %%0%dd"%len(str(len(keys))))%n + ":\t%s"%enumtype[keys[n-1]])
+		if default and keys[n-1]==default:	question += " (default: %s)"%n
 	question += ":  "
-	for n in range(len(keys)):	print(("  %%0%dd"%len(str(len(keys))))%n + ":\t%s"%enumtype[keys[n]])
 	answ = None
 	if default and default in keys:
 		while True:
 			answ = input(question)
 			if not answ:	return default
-			elif answ.isnumeric() and 1<=eval(answ)<=len(keys):	break
+			elif answ.isnumeric() and 1<=eval(answ)<=len(keys):
+				return keys[eval(answ)-1]
 			else:	answ = None
 	else:
-		while not (answ.isnumeric() and 1<=eval(answ)<=len(keys)):	answ = input(question)
+		while not (answ and answ.isnumeric() and 1<=eval(answ)<=len(keys)):	answ = input(question)
 	return keys[eval(answ)-1]
 
 def issue_invoice():
@@ -325,8 +347,10 @@ def issue_invoice():
 	client = clients[org];	del clients
 	data['FormatoTrasmissione'] = _enum_selection(FormatoTrasmissione_t, "tipologia di fattura", 'FPR12')
 	data['TipoDocumento'] = _enum_selection(Documento_t, "tipologia di documento", 'TD01')
-	data['ProgressivoInvio'] = input("Inserire il numero identificativo (progressivo) della fattura:  ")
 	#if data['TipoDocumento'] in ['TD01', ]
+	data['ProgressivoInvio'] = input("Inserire il numero identificativo (progressivo) della fattura:  ")
+	#####################
+	data['num'] = data['ProgressivoInvio']
 	data['Divisa'] = ""
 	while not (data['Divisa'] and len(data['Divisa'])==3):
 		data['Divisa'] = input("Inserire la divisa (3 caratteri, default: EUR):  ")
@@ -338,9 +362,7 @@ def issue_invoice():
 		else:
 			try:	data['Data'] = datetime.strptime(datetmp,"%d-%m-%Y").today()
 			except:	pass
-	answ = None
-	#####################
-	data['causale'] = input("Causale dell'intera fattura (obbligatoria, max. 400 caratteri):  ")
+data['causale'] = input("Causale dell'intera fattura (obbligatoria, max. 400 caratteri):  ")
 	answ = input("Se applicabile, indicare numero d'Ordine richiesto dal cessionario/committente, ovvero premere [Invio]:  ")
 	if answ:	data['ref'] = { 'Id':answ	}
 	#answer = input("Il vettore della fattura è il cliente [S]ì/[N]o ")
@@ -421,7 +443,7 @@ def issue_invoice():
 		data['pagamento']['importo'] = data['total']['TOTALE']
 	return FatturaPA_assemble(user, client, data)
 
-CFre1, CFre2, EORIre = re.compile(r"[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]"), re.compile(r"[A-Z0-9]{11,16}"), re.compile(r"[a-zA-Z0-9]{13,17}")
+CFre, EORIre = re.compile(r"[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]"), re.compile(r"[a-zA-Z0-9]{13,17}")
 emailre = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9-._]+@[a-zA-Z0-9][a-zA-Z0-9-._]+")
 IBANre, BICre = re.compile(r"[a-zA-Z]{2}[0-9]{2}[a-zA-Z0-9]{11,30}"), re.compile(r"[A-Z]{6}[A-Z2-9][A-NP-Z0-9]([A-Z0-9]{3}){0,1}")
 
@@ -481,22 +503,22 @@ Ritenuta_t2 = {	'SI':"Cessione/prestazione soggetta a ritenuta"	}
 SoggettoEmittente_t = {	'CC':"Cessionario / committente", 'TZ':"Terzo"	}
 RegimeFiscale_t = {
 	'RF01':"Regime ordinario",
-	'RF02':"Regime dei contribuenti minimi (art. 1,c.96-117, L. 244/2007)",
+	'RF02':"Regime dei contribuenti minimi (art.1 c.96-117, L.244/2007)",
 	#'RF03':"Nuove iniziative produttive (art.13 L.388/0)",
-	'RF04':"Agricoltura e attività connesse e pesca (artt.34 e 34-bis, D.P.R. 633/1972)",
-	'RF05':"Vendita sali e tabacchi (art. 74, c.1, D.P.R. 633/1972)",
-	'RF06':"Commercio dei fiammiferi (art. 74, c.1, D.P.R. 633/1972)",
-	'RF07':"Editoria (art. 74, c.1, D.P.R. 633/1972)",
-	'RF08':"Gestione di servizi di telefonia pubblica (art. 74, c.1, D.P.R. 633/1972)",
-	'RF09':"Rivendita di documenti di trasporto pubblico e di sosta (art. 74, c.1, D.P.R. 633/1972)",
-	'RF10':"Intrattenimenti, giochi e altre attività di cui alla tariffa allegata al D.P.R. 640/72 (art. 74, c.6, D.P.R. 633/1972)",
-	'RF11':"Agenzie di viaggi e turismo (art. 74-ter, D.P.R. 633/1972)",
-	'RF12':"Agriturismo (art. 5, c.2, L. 413/1991)",
-	'RF13':"Vendite a domicilio (art. 25-bis, c.6, D.P.R. 600/1973)",
-	'RF14':"Rivendita di beni usati, di oggetti	d’arte, d’antiquariato o da collezione (art.36, D.L. 41/1995)",
-	'RF15':"Agenzie di vendite all’asta di oggetti d’arte, antiquariato o da collezione (art. 40-bis, D.L. 41/1995)",
-	'RF16':"IVA per cassa P.A. (art. 6, c.5, D.P.R. 633/1972)",
-	'RF17':"IVA per cassa (art. 32-bis, D.L. 83/2012)",
+	'RF04':"Agricoltura e attività connesse e pesca (artt.34 e 34-bis)",
+	'RF05':"Vendita sali e tabacchi (art.74 c.1)",
+	'RF06':"Commercio dei fiammiferi (art.74 c.1)",
+	'RF07':"Editoria (art.74 c.1)",
+	'RF08':"Gestione di servizi di telefonia pubblica (art.74 c.1)",
+	'RF09':"Rivendita di documenti di trasporto pubblico e di sosta (art.74 c.1)",
+	'RF10':"Intrattenimenti, giochi e altre attività di cui alla tariffa allegata al DPR 640/72 (art.74 c.6)",
+	'RF11':"Agenzie di viaggi e turismo (art.74-ter)",
+	'RF12':"Agriturismo (art.5 c.2, L.413/1991)",
+	'RF13':"Vendite a domicilio (art.25-bis c.6, DPR 600/1973)",
+	'RF14':"Rivendita di beni usati, di oggetti	d’arte, d’antiquariato o da collezione (art.36, DL 41/1995)",
+	'RF15':"Agenzie di vendite all’asta di oggetti d’arte, antiquariato o da collezione (art.40-bis, DL 41/1995)",
+	'RF16':"IVA per cassa P.A. (art.6 c.5)",
+	'RF17':"IVA per cassa (art.32-bis, DL 83/2012)",
 	'RF19':"Regime forfettario",
 	'RF18':"Altro"
 }
