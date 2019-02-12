@@ -17,9 +17,13 @@ Tali fatture elettroniche sono pronte per essere *firmate* (da parte del cedente
 pyFatturaPA   consulenza | emetti | committente | inizializza
 ```
 Il tool effettua quattro possibili operazioni:
+
  `inizializza` inizializza il database JSON (`pyFatturaPA.json`) creandone uno vuoto e inserendovi *una tantum* le sole informazioni del cedente/prestatore, dalle quali viene anche determinato se è soggetto a vati tipi di casse o ritenute.
+ 
  `committente` permette di aggiungere al database JSON dei fornitori/committenti un'ulteriore voce, che sarà poi indicizzata mediante codice a 3 cifre alfanumeriche. Non è attualmente possibile rimuovere un cessionario/committente.
+ 
  `emetti` genera una singola fattura con opzioni piuttosto generiche; sono infatti supportate diverse tipologie di fattura/ritenuta/nota, esigibilità, aliquota, condizioni e modalità di pagamento, nonché causali, quantità e unità di misura per voci multiple.
+ 
  `consulenza` è una versione specializzata del precedente; crea ancor più rapidamente una singola fattura, relativa ad una prestazione senza alcuna cessazione/trasferimento di beni (e.g. una o più voci di consulenza) da parte di un professionista soggetto ad IVA (22%), alla cassa INPS (4%) e a ritenuta d'acconto (-20%). Dopo aver selezionato il committente, è possibile generarla inserendo solo 4 valori.
 
 *test* **test** `basepath` _basepath_
