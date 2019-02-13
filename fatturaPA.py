@@ -81,7 +81,6 @@ def parse_config():
 	del clients["USER"]
 	for org in clients.keys():
 		if type(org)!=type("") or len(org)!=3 or not org.isalnum():	return False, False
-	print(clients)
 	return (USER, clients)
 
 
@@ -115,7 +114,7 @@ def	add_company():
 		orgname = input("Sigla di 3 caratteri alfanumerici per la nuova organizzazione:  ").upper()
 	new_client = enter_org_data()
 	clients[orgname] = new_client
-	write_config(user, clients, append=True)
+	write_config(user, clients, append=False)
 
 
 def create_config():
@@ -123,6 +122,7 @@ def create_config():
 	user = enter_org_data()
 	answ = None
 	user['RegimeFiscale'] = _enum_selection(RegimeFiscale_t, "regime fiscale (ex DPR 633/1972)", 'RF01')
+	#user['IVA']	= VAT_DEFAULT	# Questa linea verrà sostiuita da un lookup automatico sul RegimeFiscaleIVA_t in base al valore di user['RegimeFiscale']
 	while not answ:
 		answ = input("L'utente (in qualità di cedente/prestatore) è soggetto a ritenuta? [S]ì/No ")
 		if (not answ) or answ[0].lower()=="s":
@@ -192,7 +192,7 @@ def FatturaPA_assemble(user, client, data):
 		'\t\t\t\t<Indirizzo>%s</Indirizzo>'%user['addr']['addr'],
 		'\t\t\t\t<CAP>%s</CAP>'%user['addr']['zip'],
 		'\t\t\t\t<Comune>%s</Comune>'%user['addr']['muni'],
-		'\t\t\t\t<Provincia>%2c</Provincia>'%user['addr']['prov'],
+		'\t\t\t\t<Provincia>%s</Provincia>'%user['addr']['prov'],
 		'\t\t\t\t<Nazione>%s</Nazione>'%user['addr']['country'],
 		'\t\t\t</Sede>',
 		'\t\t</CedentePrestatore>',
@@ -209,13 +209,12 @@ def FatturaPA_assemble(user, client, data):
 	else:	F.extend(['\t\t\t\t\t<Nome>%s</Nome>'%client['name'][0],'\t\t\t\t\t<Cognome>%s</Cognome>'%client['name'][1]])
 	F.extend([
 		'\t\t\t\t</Anagrafica>',
-		'\t\t\t\t<RegimeFiscale>%s</RegimeFiscale>'%client['RegimeFiscale'],
 		'\t\t\t</DatiAnagrafici>',
 		'\t\t\t<Sede>',
 		'\t\t\t\t<Indirizzo>%s</Indirizzo>'%client['addr']['addr'],
 		'\t\t\t\t<CAP>%s</CAP>'%client['addr']['zip'],
 		'\t\t\t\t<Comune>%s</Comune>'%client['addr']['muni'],
-		'\t\t\t\t<Provincia>%2c</Provincia>'%client['addr']['prov'],
+		'\t\t\t\t<Provincia>%s</Provincia>'%client['addr']['prov'],
 		'\t\t\t\t<Nazione>%s</Nazione>'%client['addr']['country'],
 		'\t\t\t</Sede>',
 		'\t\t</CessionarioCommittente>',
@@ -229,22 +228,22 @@ def FatturaPA_assemble(user, client, data):
 		'\t\t\t\t<Divisa>%s</Divisa>'%data['Divisa'],
 		'\t\t\t\t<Data>%s</Data>'%data['Data'],
 		'\t\t\t\t<Numero>%s</Numero>'%data['ProgressivoInvio']])
-	if 'ritenuta' in user.keys() and 'ritenuta' in data.keys():
+	if 'ritenuta' in user.keys() and 'ritenuta' in user.keys():
 		F.extend([
 			'\t\t\t\t<DatiRitenuta>',
 			'\t\t\t\t\t<TipoRitenuta>%s</TipoRitenuta>'%user['ritenuta']['tipo'],
-			'\t\t\t\t\t<ImportoRitenuta>%.02f</ImportoRitenuta>'%data['ritenuta']['importo'],
+			'\t\t\t\t\t<ImportoRitenuta>%.02f</ImportoRitenuta>'%abs(data['ritenuta']['importo']),
 			'\t\t\t\t\t<AliquotaRitenuta>%.02f</AliquotaRitenuta>'%user['ritenuta']['aliquota'],
 			'\t\t\t\t\t<CausalePagamento>%s</CausalePagamento>'%user['ritenuta']['causale'],
 			'\t\t\t\t</DatiRitenuta>'])
-	if 'cassa' in user.keys() and 'cassa' in data.keys():
+	if 'cassa' in user.keys() and 'cassa' in user.keys():
 		F.extend([
 			'\t\t\t\t<DatiCassaPrevidenziale>',
 			'\t\t\t\t\t<TipoCassa>%s</TipoCassa>'%user['cassa']['tipo'],
 			'\t\t\t\t\t<AlCassa>%.02f</AlCassa>'%user['cassa']['aliquota'],
-			'\t\t\t\t\t<ImportoContributoCassa>%.02f</ImportoContributoCassa>'%data['cassa']['total'],
-			'\t\t\t\t\t<AliquotaIVA>%.02f</AliquotaIVA>'%user['cassa']['aliquota'],
+			'\t\t\t\t\t<ImportoContributoCassa>%.02f</ImportoContributoCassa>'%data['cassa']['importo'],
 			'\t\t\t\t\t<ImponibileCassa>%.02f</ImponibileCassa>'%data['cassa']['imponibile'],
+			'\t\t\t\t\t<AliquotaIVA>%.02f</AliquotaIVA>'%user['cassa']['IVA'],
 			'\t\t\t\t</DatiCassaPrevidenziale>'])
 	if 'causale' in data.keys():
 		for k in range(0,len(data['causale']),200):
@@ -261,53 +260,64 @@ def FatturaPA_assemble(user, client, data):
 		for reftype in ['Contratto','Convenzione','Ricezione','FattureCollegate']:
 			if reftype in data['ref'].keys():
 				F.append('\t\t\t\t<Dati%s>%s</Dati%s>'%(reftype,data['ref'][reftype],reftype))
-	F.expand([
+	F.extend([
 		'\t\t</DatiGenerali>',
 		'\t\t<DatiBeniServizi>',
 		'\t\t\t<DettaglioLinee>'])
-	lines = sorted([data['#'][l]['linea'] for l in data['#'].keys()])
+	lines = sorted([data['#'][l]['linea'] for l in range(len(data['#']))])
 	for l in lines:
-		line = data['#'][l];
+		line = data['#'][l-1];
 		F.append('\t\t\t\t<DettaglioLinea>')
 		F.append('\t\t\t\t\t<NumeroLinea>%d</NumeroLinea>'%l)
-		if 'descr' in line.keys():	F.append('\t\t\t\t\t<Descrizione>%s</Descrizione>'%line['period']['descr'][:1000])
-		if 'period' in line.keys():	F.expand([
+		if 'descr' in line.keys():	F.append('\t\t\t\t\t<Descrizione>%s</Descrizione>'%line['descr'][:1000])
+		if 'period' in line.keys():	F.extend([
 			'\t\t\t\t\t<DataInizioPeriodo>%s</DataInzioPeriodo>'%line['period'][0].strftime("%Y-%m-%d"),
 			'\t\t\t\t\t<DataFinePeriodo>%s</DataFinePeriodo>'%line['period'][1].strftime("%Y-%m-%d")])
 		F.append('\t\t\t\t\t<PrezzoUnitario>%.02f</PrezzoUnitario>'%line['price'])
 		if 'Qty' in line.keys():
 			F.append('\t\t\t\t\t<Quantita>%.02f</Quantita>'%line['Qty'])
 			if 'unit' in line.keys():	F.append('\t\t\t\t\t<UnitaMisura>%s</UnitaMisura>'%line['unit'])
-		F.append('\t\t\t\t\t<PrezzoTotale>%s</PrezzoTotlae>'%line['total'])
+		F.append('\t\t\t\t\t<PrezzoTotale>%.02f</PrezzoTotale>'%line['total'])
 		if 'ritenuta' in user.keys():
-			F.expand([
+			F.extend([
 				'\t\t\t\t\t<AliquotaIVA>%.02f</AliquotaIVA>'%user['ritenuta']['aliquota'],
 				'\t\t\t\t\t<Ritenuta>%s</Ritenuta>'%'SI'])
 		F.append('\t\t\t\t</DettaglioLinea>')
-	F.expand([
+	F.extend([
 		'\t\t\t</DettaglioLinee>',
 		'\t\t\t<DatiRiepilogo>',
-		'\t\t\t\t<AliquotaIVA>%.02f</AliquotaIVA>'%data['total']['IVA'],
+		'\t\t\t\t<AliquotaIVA>%.02f</AliquotaIVA>'%data['total']['aliquota'],
 		'\t\t\t\t<ImponibileImporto>%.02f</ImponibileImporto>'%data['total']['imponibile'],
 		'\t\t\t\t<Imposta>%.02f</Imposta>'%data['total']['imposta'],
 		'\t\t\t\t<EsigibilitaIVA>%s</EsigibilitaIVA>'%data['EsigibilitaIVA'],
 		'\t\t\t</DatiRiepilogo>',
 		'\t\t</DatiBeniServizi>'])
 	if 'pagamento' in data.keys():
-		F.expand([
+		F.extend([
 			'\t\t<DatiPagamento>',
 			'\t\t\t<CondizioniPagamento>%s</CondizioniPagamento>'%data['pagamento']['Condizioni'],
 			'\t\t\t<DettaglioPagamento>',
-			'\t\t\t\t<ModalitaPagamento>%s</ModalitaPagamento>'%data['pagamento']['mod']])
+			'\t\t\t\t<ModalitaPagamento>%s</ModalitaPagamento>'%data['pagamento']['mod'],
+			'\t\t\t\t<ImportoPagamento>%.02f</ImportoPagamento>'%data['total']['TOTALE']])
 		if 'exp' in data['pagamento'].keys():
-				'\t\t\t\t<DataScadenzaPagamento>%s</DataScadenzaPagamento>'%data['pagamento']['expt'].strftime("%Y-%m-%d"),
-		F.expand([
+				'\t\t\t\t<DataScadenzaPagamento>%s</DataScadenzaPagamento>'%data['pagamento']['exp'].strftime("%Y-%m-%d"),
+		F.extend([
 			'\t\t\t</DettaglioPagamento>',
 			'\t\t</DatiPagamento>'])
-	F.expand([
+	F.extend([
 		'\t</FatturaElettronicaBody>',
 		'</p:FatturaElettronica>'])
-	for l in F:	print(l)
+	for n in range(len(F)):	F[n] = str(F[n])
+	eInvoice_name = "%s%s_%s.xml"%(user["VAT#"][0],user["VAT#"][1],data['ProgressivoInvio'])
+	payload_len, file_len = 0, 0
+	with open(eInvoice_name,'w') as f:
+		import os
+		print("Generating FatturaPA e-invoice XML file \"%s\"....."%eInvoice_name)
+		for line in F:
+			payload_len += len(line) + len(os.linesep)
+			file_len += f.write(line+'\n')
+	if payload_len != file_len:	print(" * WARNING!: e-Invoice file may have been inappropriately saved on storage.")
+	sys.exit(0)
 
 
 
@@ -315,6 +325,7 @@ def _enum_selection(enumtype, enumname=None, default=None):
 	if not enumname:	question = "Indicare la selezione numerica sopra elencata"
 	else:	question = "Prego selezionare %s"%enumname
 	keys = sorted(list(enumtype.keys()))
+	print()
 	for n in range(1,len(keys)+1):
 		print(("  %%0%dd"%len(str(len(keys))))%n + ":\t%s"%enumtype[keys[n-1]])
 		if default and keys[n-1]==default:	question += " (default: %s)"%n
@@ -348,7 +359,9 @@ def issue_invoice():
 	data['FormatoTrasmissione'] = _enum_selection(FormatoTrasmissione_t, "tipologia di fattura", 'FPR12')
 	data['TipoDocumento'] = _enum_selection(Documento_t, "tipologia di documento", 'TD01')
 	#if data['TipoDocumento'] in ['TD01', ]
-	data['ProgressivoInvio'] = input("Inserire il numero identificativo (progressivo) della fattura:  ")
+	data['ProgressivoInvio'] = None
+	while not data['ProgressivoInvio']:
+		data['ProgressivoInvio'] = input("Inserire il numero identificativo (progressivo) della fattura:  ")
 	#####################
 	data['num'] = data['ProgressivoInvio']
 	data['Divisa'] = ""
@@ -356,13 +369,16 @@ def issue_invoice():
 		data['Divisa'] = input("Inserire la divisa (3 caratteri, default: EUR):  ")
 		if not data['Divisa']:	data['Divisa'] = "EUR"
 	data['Data'] = None
-	while not Date.isinstance(datetime.date):
+	while True:
 		datetmp = input("Data fatturazione nel formato GG-MM-AAAA (per oggi premere [Invio]):  ")
-		if not datetmp:	data['Data'] = datetime.date.today()
+		if not datetmp:
+			data['Data'] = datetime.date.today()
+			break
 		else:
-			try:	data['Data'] = datetime.strptime(datetmp,"%d-%m-%Y").today()
+			try:
+				data['Data'] = datetime.datetime.strptime(datetmp,"%d-%m-%Y")
+				break
 			except:	pass
-data['causale'] = input("Causale dell'intera fattura (obbligatoria, max. 400 caratteri):  ")
 	answ = input("Se applicabile, indicare numero d'Ordine richiesto dal cessionario/committente, ovvero premere [Invio]:  ")
 	if answ:	data['ref'] = { 'Id':answ	}
 	#answer = input("Il vettore della fattura è il cliente [S]ì/[N]o ")
@@ -371,46 +387,64 @@ data['causale'] = input("Causale dell'intera fattura (obbligatoria, max. 400 car
 	#	vector = enter_org_data()
 	#else:	vector = client
 	data['EsigibilitaIVA'] = _enum_selection(EsigibilitaIVA_t, "esigibilità dell'IVA", 'I')
+	while True:
+		aliquotaIVA = input("Aliquota IVA (default: %d%%; indicare \"0\" se non applcabile):  "%user['cassa']['IVA'])
+		if not aliquotaIVA:	aliquotaIVA = VAT_DEFAULT;	break
+		elif aliquotaIVA.isnumeric():	aliquotaIVA = eval(aliquotaIVA);	break
 	data['total'] = {
-		'aliquota':eval(input("Aliquota IVA (indicare \"0\" se non applcabile):  ")),
-		'imponibile':0.
+		'aliquota':aliquotaIVA,
+		'subtotale':0.,		# imponibile lordo(?)
+		'imponibile':0.	# imponibile netto(?)
 		}
 	answ = None
-	while True:
-		answ = input("Si vuole specificare condizioni di pagamento? Sì/[N]o ")
-		if not answ or answ[0].lower()=='n':	break
-		data['pagamento'] = {	'Condizioni':_enum_selection(CondizioniPagamento_t, "condizioni di pagamento", 'TP02')	}
-		if data['pagamento']['Condizioni'] == 'TP01':
-			exp = None
-			while not exp.isinstance(datetime.date):
-				try:	exp = datetime.strptime(input("Indicare la scadenza della rata (formato GG-MM-AAA):  "),"%d-%m-%Y")
-				except:	pass
-		data['pagamento']['mod']:_enum_selection(ModalitaPagamento_t, "modalità di pagamento", 'MP05')	
+	data['pagamento'] = {
+		'Condizioni':_enum_selection(CondizioniPagamento_t, "condizioni di pagamento", 'TP02'),
+		'mod':_enum_selection(ModalitaPagamento_t, "modalità di pagamento", 'MP05')	
+		}
+	if data['pagamento']['Condizioni'] == 'TP01':
+		exp = None
+		while not exp.isinstance(datetime.date):
+			try:	exp = datetime.strptime(input("Indicare la scadenza della rata (formato GG-MM-AAA):  "),"%d-%m-%Y")
+			except:	continue
+			data['pagamento']['exp'] = datetime.datetime.strptime(exp,"%d-%m-%Y")
 	data['Scadenza'] = None
-	while not data['Scadenza'].isinstance(datetime.date):
-		datetmp = input("Scadenza di pagamento della fattura nel formato GG-MM-AAAA (per 30gg premere [Invio]):  ")
-		if not datetmp:	data['Scadenza'] = datetime.date.today() + datetime.timedelta(days=30)
+	while True:
+		datetmp = input("Scadenza di pagamento della fattura nel formato GG-MM-AAAA (premere [Invio] per +30 giorni):  ")
+		if not datetmp:
+			data['Scadenza'] = data['Data'] + datetime.timedelta(days=30)
+			break
 		else:
-			try:	data['Scadenza'] = datetime.strptime(datetmp,"%d-%m-%Y")
+			try:
+				data['Scadenza'] = datetime.datetime.strptime(datetmp,"%d-%m-%Y")
+				break
 			except:	pass
+	data['causale'] = input("Causale dell'intera fattura (max. 400 caratteri):  ")[:400]
+	if not data['causale']:	del data['causale']
 	data['#'], l, = [], 1
 	while True:
 		print("\nVOCE #%d DELLA FATTURA."%l)
-		price = eval(input("Prezzo unitario della voce #%d:  "%l))
-		if not price:	l -= 1;	break
-		qty, vat = None
-		while not qty:
-			qty = input("Quantità della voce #%d  [default: 1]:  "%l)
-			if qty.isnumeric():
-				qty = eval(qty)
+		while True:
+			vocestr = "Prezzo unitario della voce #%d"%l
+			if l > 1:	vocestr += " ([Invio] se le voci fattura sono terminate)"
+			vocestr += ":  "
+			pricetmp = input(vocestr)
+			if pricetmp and pricetmp.isnumeric():
+				price = eval(pricetmp);	break
+			elif not pricetmp and l>1:	break
+		if not pricetmp:	l -= 1;	break
+		qty, vat = None, None
+		while True:
+			qtytmp = input("Quantità della voce #%d  [default: 1]:  "%l)
+			if qtytmp and qtytmp.isnumeric():
+				qty = eval(qtytmp)
 				if qty <= 0:	qty = None
-			elif not qty:	qty = 0
-			else:	qty = None
-		if qty and qty.isnumeric():
+				break
+			elif not qtytmp:	break
+		if qty:
 			total = price * qty
 			unit = input("Unità di misura della voce #%d (premere [Invio] per nessuna):  "%l)
 		else:	total, unit = price, None
-		data['total']['imponibile'] += total
+		data['total']['subtotale'] += total
 		#	while not vat:
 		#		vat = input("Alitquota della voce #%d  [%%, default: %d]:  "%int(DEF_VAT))
 		#		if vat.isnumeric():
@@ -423,21 +457,31 @@ data['causale'] = input("Causale dell'intera fattura (obbligatoria, max. 400 car
 		if qty:
 			line['Qty'] = qty
 			if unit:	line['unit'] = unit
+		if not descr:	del line['descr']
 		data['#'].append( line )
 		del price, vat, qty, total, descr
 		l += 1
 	if not data['#']:
 		print(" * ERROR!: Non sono state inserite voci nella fattura (è necessaria almeno una voce).")
 		sys.exit(-6)
-	subtotale = data['total']['imponibile']
-	if 'cassa' in user.keys():	###	CASSA
-		data['total']['imposta'] = data['cassa']['importo'] = subtotale * user['cassa']['aliquota']
-	else:	data['total']['imposta'] = data['cassa']['importo'] = 0
+	subtotale = data['total']['subtotale']
+	####	CALCOLO DELLA RIVALSA INPS
+	if 'cassa' in user.keys():
+		data['total']['cassa'] = subtotale * (user['cassa']['aliquota']/100)
+	else:	data['total']['imposta'] = 0
+	data['cassa'] = {	'importo':data['total']['cassa'], 'imponibile':subtotale, 'aliquota':user['cassa']['aliquota']	}
 	subtotale += data['cassa']['importo']
+	data['total']['imponibile'] = subtotale
+	####	CALCOLO DELLA RITENUTA D'ACCONTO
 	if 'ritenuta' in user.keys():
-		data['total']['ritenuta'] = data['ritenuta']['importo'] = -1 * subtotale * user['ritenuta']['aliquota']
-	else:	data['total']['ritenuta'] = data['ritenuta']['importo'] = 0
-	subtotale += data['ritenuta']['importo']
+		data['total']['ritenuta'] = -1 * subtotale * (user['ritenuta']['aliquota']/100)	# = user['ritenuta']['importo']
+	else:	data['total']['ritenuta'] = 0
+	data['ritenuta'] = {	'importo':data['total']['ritenuta'], 'imponibile':subtotale, 'aliquota':user['ritenuta']['aliquota']	}
+	subtotale += data['total']['ritenuta']
+	####	CALCOLO DELL'IMPONIBILE EFFETTIVO
+	data['total']['imposta'] = data['total']['imponibile'] * (data['total']['aliquota']/100)
+	####	CALCOLO DELL'IMPORTO TOTALE
+	subtotale += data['total']['imposta']
 	data['total']['TOTALE'] = max(0,subtotale)
 	if 'pagamento' in data.keys():
 		data['pagamento']['importo'] = data['total']['TOTALE']
@@ -522,6 +566,27 @@ RegimeFiscale_t = {
 	'RF19':"Regime forfettario",
 	'RF18':"Altro"
 }
+#RegimeFiscaleIVA_t = {
+#	'RF01':22.0,
+#	'RF02':20.0,
+#	#'RF03':"Nuove iniziative produttive (art.13 L.388/0)",
+#	'RF04':10.0,
+#	'RF05':"Vendita sali e tabacchi (art.74 c.1)",
+#	'RF06':"Commercio dei fiammiferi (art.74 c.1)",
+#	'RF07':"Editoria (art.74 c.1)",
+#	'RF08':"Gestione di servizi di telefonia pubblica (art.74 c.1)",
+#	'RF09':"Rivendita di documenti di trasporto pubblico e di sosta (art.74 c.1)",
+#	'RF10':"Intrattenimenti, giochi e altre attività di cui alla tariffa allegata al DPR 640/72 (art.74 c.6)",
+#	'RF11':"Agenzie di viaggi e turismo (art.74-ter)",
+#	'RF12':"Agriturismo (art.5 c.2, L.413/1991)",
+#	'RF13':"Vendite a domicilio (art.25-bis c.6, DPR 600/1973)",
+#	'RF14':"Rivendita di beni usati, di oggetti	d’arte, d’antiquariato o da collezione (art.36, DL 41/1995)",
+#	'RF15':"Agenzie di vendite all’asta di oggetti d’arte, antiquariato o da collezione (art.40-bis, DL 41/1995)",
+#	'RF16':"IVA per cassa P.A. (art.6 c.5)",
+#	'RF17':"IVA per cassa (art.32-bis, DL 83/2012)",
+#	'RF19':"Regime forfettario",
+#	'RF18':"Altro"
+#}
 CondizioniPagamento_t = {	'TP01':"pagamento a rate", 'TP02':"pagamento completo", 'TP03':"anticipo"	}
 ModalitaPagamento_t = {
 	'MP01':"contanti", 'MP02':"assegno circolare", 'MP04':"contanti presso Tesoreria", 'MP05':"bonifico", 'MP06':"vaglia cambiario", 'MP07':"bollettino bancario",
@@ -540,18 +605,20 @@ TipoCessionePrestazione_t = {	'SC':"Sconto", 'PR':"Premio", 'AB':"Abbuono", 'AC'
 
 def main():
 	def print_args():
-		print("%s %s - Genera rapidamente fatture elettroniche semplici in XML nel formato FatturaPA."%(sys.argv[0].upper(),__VERSION))
-		print("Copytight (C) 2019 Walter Arrighetti  <walter.arrighetti@agid.gov.it>\n")
 		print(" Utilizzo:  %s  emetti | fornitore | inizializza"%sys.argv[0].lower())
-		print("\t\temetti       Genera FatturaPA verso fornitore esistente")
-		print("\t\tfornitore    Aggiunge un fornitore (italiano) al database")
+		print("\t\tconsulenza   Genera FatturaPA per consulenza verso fornitore esistente")
+		print("\t\temetti       Genera FatturaPA generica verso fornitore esistente")
+		print("\t\tcommittente  Aggiunge un fornitore (italiano) al database")
 		print("\t\tinizializza  Inizializza un nuovo database con i tuoi dati")
 		print('\n')
 		sys.exit(9)
+	print("%s %s - Genera rapidamente fatture elettroniche semplici in XML nel formato FatturaPA."%(sys.argv[0].upper(),__VERSION))
+	print("Copytight (C) 2019 Walter Arrighetti  <walter.arrighetti@agid.gov.it>\n")
 	[PROVINCES.extend(list(prov.keys())) for prov in REGIONS.values()]
 	if len(sys.argv) != 2:	print_args()
+	elif sys.argv[1].lower()=="consulenza":	issue_consultancy()
 	elif sys.argv[1].lower()=="emetti":	issue_invoice()
-	elif sys.argv[1].lower()=="fornitore":	add_company()
+	elif sys.argv[1].lower()=="committente":	add_company()
 	elif sys.argv[1].lower()=="inizializza":	create_config()
 	else:	print_args()
 	sys.exit(0)
