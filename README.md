@@ -2,6 +2,8 @@
 Tool for quick, command-line generation of simple e-Invoice compatible with the Italian-standard, [FatturaPA](https://www.fatturapa.gov.it).
 
 This is a typical, lazy sunday afternoon exercise, aimed at self-generating e-invoices to private companies as an individual freelance consultant.
+***DISCLAIMER***: The author denies any responsibilities, either explicit or implied, on possible damages and liabilities derived or implied by the use of this software tool. In particular, no assumption of validity or compatibility on the software deliverables must be assumed. Also, the software is supplied *as is* (in GNU GPL terminology).
+
 It is a rudimetary command-line generator of XML e-invoices to be later electronically signed or sealed. It generates a JSON database of clients (with VAT# and full invoicing information). More and more complex invoicing scenarios will be added in future releases.
 Due to the validity of such e-invoicing standard being limited to Italian finance, the README continues in Italian.
 
@@ -26,4 +28,4 @@ Il tool effettua quattro possibili operazioni:
  
  `consulenza` è una versione specializzata del precedente; crea ancor più rapidamente una singola fattura, relativa ad una prestazione senza alcuna cessazione/trasferimento di beni (e.g. una o più voci di consulenza) da parte di un professionista soggetto ad IVA (22%), alla cassa INPS (4%) e a ritenuta d'acconto (-20%). Dopo aver selezionato il committente, è possibile generarla inserendo solo 4 valori.
 
-*test* **test** `basepath` _basepath_
+***DISCLAIMER***: L'autore nega ogni responsabilità, diretta o indiretta, circa l'uso del software e dei suoi derivati. In particolare non viene fatta alcuna presunzione di validità e conformità delle evidenze informatiche prodotte con gli standard tecnici di riferimento. Inoltre, il software è fornito *così com'è*, secondo i termini della licenza utilizzata.
