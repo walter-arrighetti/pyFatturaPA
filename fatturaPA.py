@@ -1,6 +1,6 @@
 # coding=utf-8
 ##########################################################
-#  pyFatturaPA 0.1                                       #
+#  pyFatturaPA 0.2                                       #
 #--------------------------------------------------------#
 #   Quick generation of FatturaPA eInvoice XML files !   #
 #--------------------------------------------------------#
@@ -31,17 +31,17 @@ def enter_org_data():
 	print('\n')
 	answer = input("P.IVA individuale? Sì/[N]o ")
 	if answer and answer.lower()[0]=='s':	orgname = tuple([input("Nome:  "), input("Cognome:  ")])
-	else:	orgname = input("Ragione sociale:  ")
-	VATit = input("Partita IVA:  ")
+	else:	orgname = str(input("Ragione sociale:  "))
+	VATit = str(input("Partita IVA:  "))
 	CF = None
 	while CF==None:
-		CF = input("Codice Fiscale (se applicabile):  ")
+		CF = str(input("Codice Fiscale (se applicabile):  "))
 		if CF=="":	break
 		elif CF and CFre.match(CF) or (10<len(CF)<17 and CF.isalnum()):	break
 		CF = None
 	email = None
 	while email==None:
-		email = input("Indirizzo email (obbligatoriamente PEC se in Italia):  ")
+		email = str(input("Indirizzo email (obbligatoriamente PEC se in Italia):  "))
 		if email=="" or emailre.match(email):	break
 		else:	email = None
 	if email:
@@ -49,27 +49,27 @@ def enter_org_data():
 		print("Indirizzo PEC specificato: identificativo unico impostato a '0000000'.")
 	else:
 		Id = None
-		while not Id:	Id = input("Identificativo Unico (se applicabile):  ")
+		while not Id:	Id = str(input("Identificativo Unico (se applicabile):  "))
 	if not CF:	CF = None
 	if not Id:	Id = None
 	addr = {	'country':"", 'zip':"", 'addr':None, 'prov':None, 'muni':None	}
 	while len(addr['country'])!=2:
-		addr['country'] = input("Sigla a 2 caratteri della nazione (premi [Invio] per Italia):  ").upper()
+		addr['country'] = str(input("Sigla a 2 caratteri della nazione (premi [Invio] per Italia):  ")).upper()
 		if not addr['country']:	addr['country'] = "IT"
 	if addr['country']=="IT":
 		while not (len(addr['zip'])==5 and addr['zip'].isnumeric()):
 			addr['zip'] = input("CAP (5 cifre):  ").upper()
 		while not addr['prov']:
-			prov = input("Provincia (sigla a 2 cifre):  ").upper()
+			prov = str(input("Provincia (sigla a 2 cifre):  ")).upper()
 			if prov in PROVINCES:	addr['prov'] = prov
 		while not addr['muni']:
-			comune = input("Comune (nome completo):  ")
+			comune = str(input("Comune (nome completo):  "))
 			if comune:	addr['muni'] = comune
 	else:
 		print("\nATTENZIONE!: Questa versione di supporta solo fatture da/per enti con sede in Italia.")
 		sys.exit(-1)
 	while not addr['addr']:
-		addr['addr'] = input("Indirizzo (via/piazza/..., numero civico):  ")
+		addr['addr'] = str(input("Indirizzo (via/piazza/..., numero civico):  "))
 	return {	'name':orgname, 'VAT#':('IT',VATit), 'CF':CF, 'Id':Id, 'addr':addr, 'email':email }
 
 
@@ -111,7 +111,7 @@ def	add_company():
 	if not user:	return False
 	orgname = ""
 	while len(orgname)!=3 or not orgname.isalnum() or orgname in clients.keys():
-		orgname = input("Sigla di 3 caratteri alfanumerici per la nuova organizzazione:  ").upper()
+		orgname = str(input("Sigla di 3 caratteri alfanumerici per la nuova organizzazione:  ")).upper()
 	new_client = enter_org_data()
 	clients[orgname] = new_client
 	write_config(user, clients, append=False)
@@ -262,27 +262,27 @@ def FatturaPA_assemble(user, client, data):
 				F.append('\t\t\t\t<Dati%s>%s</Dati%s>'%(reftype,data['ref'][reftype],reftype))
 	F.extend([
 		'\t\t</DatiGenerali>',
-		'\t\t<DatiBeniServizi>',
-		'\t\t\t<DettaglioLinee>'])
+		'\t\t<DatiBeniServizi>'])
 	lines = sorted([data['#'][l]['linea'] for l in range(len(data['#']))])
 	for l in lines:
 		line = data['#'][l-1];
-		F.append('\t\t\t\t<DettaglioLinea>')
-		F.append('\t\t\t\t\t<NumeroLinea>%d</NumeroLinea>'%l)
-		if 'descr' in line.keys():	F.append('\t\t\t\t\t<Descrizione>%s</Descrizione>'%line['descr'][:1000])
+		F.append('\t\t\t<DettaglioLinee>')
+		F.append('\t\t\t\t<NumeroLinea>%d</NumeroLinea>'%l)
+		if 'descr' in line.keys():	F.append('\t\t\t\t<Descrizione>%s</Descrizione>'%line['descr'][:1000])
 		if 'period' in line.keys():	F.extend([
-			'\t\t\t\t\t<DataInizioPeriodo>%s</DataInzioPeriodo>'%line['period'][0].strftime("%Y-%m-%d"),
-			'\t\t\t\t\t<DataFinePeriodo>%s</DataFinePeriodo>'%line['period'][1].strftime("%Y-%m-%d")])
-		F.append('\t\t\t\t\t<PrezzoUnitario>%.02f</PrezzoUnitario>'%line['price'])
+			'\t\t\t\t<DataInizioPeriodo>%s</DataInzioPeriodo>'%line['period'][0].strftime("%Y-%m-%d"),
+			'\t\t\t\t<DataFinePeriodo>%s</DataFinePeriodo>'%line['period'][1].strftime("%Y-%m-%d")])
+		F.append('\t\t\t\t<PrezzoUnitario>%.02f</PrezzoUnitario>'%line['price'])
 		if 'Qty' in line.keys():
 			F.append('\t\t\t\t\t<Quantita>%.02f</Quantita>'%line['Qty'])
 			if 'unit' in line.keys():	F.append('\t\t\t\t\t<UnitaMisura>%s</UnitaMisura>'%line['unit'])
-		F.append('\t\t\t\t\t<PrezzoTotale>%.02f</PrezzoTotale>'%line['total'])
+		F.extend([
+			'\t\t\t\t<PrezzoTotale>%.02f</PrezzoTotale>'%line['total'],
+			'\t\t\t\t<AliquotaIVA>%.02f</AliquotaIVA>'%data['total']['aliquota']
+			])
 		if 'ritenuta' in user.keys():
-			F.extend([
-				'\t\t\t\t\t<AliquotaIVA>%.02f</AliquotaIVA>'%user['ritenuta']['aliquota'],
-				'\t\t\t\t\t<Ritenuta>%s</Ritenuta>'%'SI'])
-		F.append('\t\t\t\t</DettaglioLinea>')
+			F.append('\t\t\t\t<Ritenuta>%s</Ritenuta>'%'SI')
+		F.append('\t\t\t</DettaglioLinee>')
 	F.extend([
 		'\t\t\t</DettaglioLinee>',
 		'\t\t\t<DatiRiepilogo>',
@@ -309,16 +309,20 @@ def FatturaPA_assemble(user, client, data):
 		'</p:FatturaElettronica>'])
 	for n in range(len(F)):	F[n] = str(F[n])
 	eInvoice_name = "%s%s_%s.xml"%(user["VAT#"][0],user["VAT#"][1],data['ProgressivoInvio'])
+	return write_FatturaPA(eInvoice_name, F)
+
+def write_FatturaPA(filename, lines):
 	payload_len, file_len = 0, 0
-	with open(eInvoice_name,'w') as f:
+	with open(filename,'w') as f:
 		import os
-		print("Generating FatturaPA e-invoice XML file \"%s\"....."%eInvoice_name)
-		for line in F:
+		print("Generating FatturaPA e-invoice XML file \"%s\"....."%filename)
+		for line in lines:
 			payload_len += len(line) + len(os.linesep)
 			file_len += f.write(line+'\n')
+	print("payload:\t%d"%payload_len)
+	print("file:\t%d"%file_len)
 	if payload_len != file_len:	print(" * WARNING!: e-Invoice file may have been inappropriately saved on storage.")
 	sys.exit(0)
-
 
 
 def _enum_selection(enumtype, enumname=None, default=None):
@@ -407,17 +411,17 @@ def issue_invoice():
 			try:	exp = datetime.strptime(input("Indicare la scadenza della rata (formato GG-MM-AAA):  "),"%d-%m-%Y")
 			except:	continue
 			data['pagamento']['exp'] = datetime.datetime.strptime(exp,"%d-%m-%Y")
-	data['Scadenza'] = None
-	while True:
-		datetmp = input("Scadenza di pagamento della fattura nel formato GG-MM-AAAA (premere [Invio] per +30 giorni):  ")
-		if not datetmp:
-			data['Scadenza'] = data['Data'] + datetime.timedelta(days=30)
-			break
-		else:
-			try:
-				data['Scadenza'] = datetime.datetime.strptime(datetmp,"%d-%m-%Y")
+	else:
+		while True:
+			datetmp = input("Scadenza di pagamento della fattura nel formato GG-MM-AAAA (premere [Invio] per +30 giorni):  ")
+			if not datetmp:
+				data['pagamento']['exp'] = data['Data'] + datetime.timedelta(days=30)
 				break
-			except:	pass
+			else:
+				try:
+					data['pagamento']['exp'] = datetime.datetime.strptime(datetmp,"%d-%m-%Y")
+					break
+				except:	pass
 	data['causale'] = input("Causale dell'intera fattura (max. 400 caratteri):  ")[:400]
 	if not data['causale']:	del data['causale']
 	data['#'], l, = [], 1
