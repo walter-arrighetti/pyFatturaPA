@@ -1,6 +1,6 @@
 # coding=utf-8
 ##########################################################
-#  pyFatturaPA 0.2                                       #
+#  pyFatturaPA 0.3                                       #
 #--------------------------------------------------------#
 #   Quick generation of FatturaPA eInvoice XML files !   #
 #--------------------------------------------------------#
@@ -17,7 +17,7 @@ import json
 import sys
 import re
 
-__VERSION = "0.1"
+__VERSION = "0.3"
 CONF_FILE = "pyFatturaPA.conf"
 VAT_DEFAULT = 22.0
 
@@ -30,7 +30,7 @@ def check_config():
 def enter_org_data():
 	print('\n')
 	answer = input("P.IVA individuale? Sì/[N]o ")
-	if answer and answer.lower()[0]=='s':	orgname = tuple([input("Nome:  "), input("Cognome:  ")])
+	if answer and answer.lower()[0]=='s':	orgname = tuple([str(input("Nome:  ")), input(str("Cognome:  "))])
 	else:	orgname = str(input("Ragione sociale:  "))
 	VATit = str(input("Partita IVA:  "))
 	CF = None
@@ -69,7 +69,8 @@ def enter_org_data():
 		print("\nATTENZIONE!: Questa versione di supporta solo fatture da/per enti con sede in Italia.")
 		sys.exit(-1)
 	while not addr['addr']:
-		addr['addr'] = str(input("Indirizzo (via/piazza/..., numero civico):  "))
+		addr['addr'] = str(input("Indirizzo (via/piazza/..., *senza* numero civico):  "))
+	addr['#'] = str(input("Numero civico (se applicabile):  "))
 	return {	'name':orgname, 'VAT#':('IT',VATit), 'CF':CF, 'Id':Id, 'addr':addr, 'email':email }
 
 
@@ -96,8 +97,6 @@ def write_config(user, clients, append):
 		print(" * ERROR!: Unable to create/modify database \"%s\"."%os.path.abspath(CONF_GILE))
 		sys.exit(-8)
 	clients["USER"] = user
-	#for client in clients.keys():
-	#	conf.write(pretty_dict_print(client,clients[client]))
 	conf.write(json.dumps(clients, indent='\t'))
 	conf.close()
 
@@ -122,7 +121,6 @@ def create_config():
 	user = enter_org_data()
 	answ = None
 	user['RegimeFiscale'] = _enum_selection(RegimeFiscale_t, "regime fiscale (ex DPR 633/1972)", 'RF01')
-	#user['IVA']	= VAT_DEFAULT	# Questa linea verrà sostiuita da un lookup automatico sul RegimeFiscaleIVA_t in base al valore di user['RegimeFiscale']
 	while not answ:
 		answ = input("L'utente (in qualità di cedente/prestatore) è soggetto a ritenuta? [S]ì/No ")
 		if (not answ) or answ[0].lower()=="s":
@@ -148,13 +146,27 @@ def create_config():
 			user['cassa'] = {
 				'tipo':_enum_selection(TipoCassa_t, "cassa di appartenenza", 'TC22'),
 				'aliquota':eval(input("Indicare l'aliquota contributo cassa:  ")),
-				'IVA':VAT_DEFAULT
+				'IVA':VAT_DEFAULT	# Questa linea verrà sostiuita da un lookup automatico sul RegimeFiscaleIVA_t in base al valore di user['RegimeFiscale']
 			}
 		elif answ and answ[0].lower()=="n":
 			del user['cassa']
 			answ = None;	break
 		else: answ = None;	continue
 	write_config(user, {}, append=False)
+
+
+def FatturaPA_write(filename, lines, debug_len=False):
+	payload_len, file_len = 0, 0
+	with open(filename,'w') as f:
+		import os
+		print("Generating FatturaPA e-invoice XML file \"%s\"....."%filename)
+		for line in lines:
+			payload_len += len(line) + len(os.linesep)
+			file_len += f.write(line+'\n')
+	if debug_len:
+		print("File length:  precomp_payload=%d\tI/O=%d"%(payload_len,file_len))
+	sys.exit(0)
+
 
 def FatturaPA_assemble(user, client, data):
 	#####	FATTURA ELETTRONICA HEADER
@@ -189,7 +201,10 @@ def FatturaPA_assemble(user, client, data):
 		'\t\t\t\t<RegimeFiscale>%s</RegimeFiscale>'%user['RegimeFiscale'],
 		'\t\t\t</DatiAnagrafici>',
 		'\t\t\t<Sede>',
-		'\t\t\t\t<Indirizzo>%s</Indirizzo>'%user['addr']['addr'],
+		'\t\t\t\t<Indirizzo>%s</Indirizzo>'%user['addr']['addr']])
+	if '#' in user['addr'].keys():
+		F.append('\t\t\t\t<NumeroCivico>%s</NumeroCivico>'%user['addr']['#'])
+	F.extend([
 		'\t\t\t\t<CAP>%s</CAP>'%user['addr']['zip'],
 		'\t\t\t\t<Comune>%s</Comune>'%user['addr']['muni'],
 		'\t\t\t\t<Provincia>%s</Provincia>'%user['addr']['prov'],
@@ -211,7 +226,10 @@ def FatturaPA_assemble(user, client, data):
 		'\t\t\t\t</Anagrafica>',
 		'\t\t\t</DatiAnagrafici>',
 		'\t\t\t<Sede>',
-		'\t\t\t\t<Indirizzo>%s</Indirizzo>'%client['addr']['addr'],
+		'\t\t\t\t<Indirizzo>%s</Indirizzo>'%client['addr']['addr']])
+	if '#' in client['addr'].keys():
+		F.append('\t\t\t\t<NumeroCivico>%s</NumeroCivico>'%client['addr']['#'])
+	F.extend([
 		'\t\t\t\t<CAP>%s</CAP>'%client['addr']['zip'],
 		'\t\t\t\t<Comune>%s</Comune>'%client['addr']['muni'],
 		'\t\t\t\t<Provincia>%s</Provincia>'%client['addr']['prov'],
@@ -284,7 +302,6 @@ def FatturaPA_assemble(user, client, data):
 			F.append('\t\t\t\t<Ritenuta>%s</Ritenuta>'%'SI')
 		F.append('\t\t\t</DettaglioLinee>')
 	F.extend([
-		'\t\t\t</DettaglioLinee>',
 		'\t\t\t<DatiRiepilogo>',
 		'\t\t\t\t<AliquotaIVA>%.02f</AliquotaIVA>'%data['total']['aliquota'],
 		'\t\t\t\t<ImponibileImporto>%.02f</ImponibileImporto>'%data['total']['imponibile'],
@@ -300,7 +317,7 @@ def FatturaPA_assemble(user, client, data):
 			'\t\t\t\t<ModalitaPagamento>%s</ModalitaPagamento>'%data['pagamento']['mod'],
 			'\t\t\t\t<ImportoPagamento>%.02f</ImportoPagamento>'%data['total']['TOTALE']])
 		if 'exp' in data['pagamento'].keys():
-				'\t\t\t\t<DataScadenzaPagamento>%s</DataScadenzaPagamento>'%data['pagamento']['exp'].strftime("%Y-%m-%d"),
+			F.append('\t\t\t\t<DataScadenzaPagamento>%s</DataScadenzaPagamento>'%data['pagamento']['exp'].strftime("%Y-%m-%d"))
 		F.extend([
 			'\t\t\t</DettaglioPagamento>',
 			'\t\t</DatiPagamento>'])
@@ -309,20 +326,7 @@ def FatturaPA_assemble(user, client, data):
 		'</p:FatturaElettronica>'])
 	for n in range(len(F)):	F[n] = str(F[n])
 	eInvoice_name = "%s%s_%s.xml"%(user["VAT#"][0],user["VAT#"][1],data['ProgressivoInvio'])
-	return write_FatturaPA(eInvoice_name, F)
-
-def write_FatturaPA(filename, lines):
-	payload_len, file_len = 0, 0
-	with open(filename,'w') as f:
-		import os
-		print("Generating FatturaPA e-invoice XML file \"%s\"....."%filename)
-		for line in lines:
-			payload_len += len(line) + len(os.linesep)
-			file_len += f.write(line+'\n')
-	print("payload:\t%d"%payload_len)
-	print("file:\t%d"%file_len)
-	if payload_len != file_len:	print(" * WARNING!: e-Invoice file may have been inappropriately saved on storage.")
-	sys.exit(0)
+	return FatturaPA_write(eInvoice_name, F)
 
 
 def _enum_selection(enumtype, enumname=None, default=None):
@@ -346,6 +350,10 @@ def _enum_selection(enumtype, enumname=None, default=None):
 		while not (answ and answ.isnumeric() and 1<=eval(answ)<=len(keys)):	answ = input(question)
 	return keys[eval(answ)-1]
 
+
+def issue_consultancy():	pass
+
+
 def issue_invoice():
 	user, clients = parse_config()
 	data = {}
@@ -362,7 +370,6 @@ def issue_invoice():
 	client = clients[org];	del clients
 	data['FormatoTrasmissione'] = _enum_selection(FormatoTrasmissione_t, "tipologia di fattura", 'FPR12')
 	data['TipoDocumento'] = _enum_selection(Documento_t, "tipologia di documento", 'TD01')
-	#if data['TipoDocumento'] in ['TD01', ]
 	data['ProgressivoInvio'] = None
 	while not data['ProgressivoInvio']:
 		data['ProgressivoInvio'] = input("Inserire il numero identificativo (progressivo) della fattura:  ")
@@ -411,17 +418,17 @@ def issue_invoice():
 			try:	exp = datetime.strptime(input("Indicare la scadenza della rata (formato GG-MM-AAA):  "),"%d-%m-%Y")
 			except:	continue
 			data['pagamento']['exp'] = datetime.datetime.strptime(exp,"%d-%m-%Y")
-	else:
-		while True:
-			datetmp = input("Scadenza di pagamento della fattura nel formato GG-MM-AAAA (premere [Invio] per +30 giorni):  ")
-			if not datetmp:
-				data['pagamento']['exp'] = data['Data'] + datetime.timedelta(days=30)
-				break
-			else:
-				try:
-					data['pagamento']['exp'] = datetime.datetime.strptime(datetmp,"%d-%m-%Y")
-					break
-				except:	pass
+	#else:
+	#	while True:
+	#		datetmp = input("Scadenza di pagamento della fattura nel formato GG-MM-AAAA (premere [Invio] per +30 giorni):  ")
+	#		if not datetmp:
+	#			data['pagamento']['exp'] = data['Data'] + datetime.timedelta(days=30)
+	#			break
+	#		else:
+	#			try:
+	#				data['pagamento']['exp'] = datetime.datetime.strptime(datetmp,"%d-%m-%Y")
+	#				break
+	#			except:	pass
 	data['causale'] = input("Causale dell'intera fattura (max. 400 caratteri):  ")[:400]
 	if not data['causale']:	del data['causale']
 	data['#'], l, = [], 1
@@ -573,23 +580,23 @@ RegimeFiscale_t = {
 #RegimeFiscaleIVA_t = {
 #	'RF01':22.0,
 #	'RF02':20.0,
-#	#'RF03':"Nuove iniziative produttive (art.13 L.388/0)",
+#	#'RF03':,
 #	'RF04':10.0,
-#	'RF05':"Vendita sali e tabacchi (art.74 c.1)",
-#	'RF06':"Commercio dei fiammiferi (art.74 c.1)",
-#	'RF07':"Editoria (art.74 c.1)",
-#	'RF08':"Gestione di servizi di telefonia pubblica (art.74 c.1)",
-#	'RF09':"Rivendita di documenti di trasporto pubblico e di sosta (art.74 c.1)",
-#	'RF10':"Intrattenimenti, giochi e altre attività di cui alla tariffa allegata al DPR 640/72 (art.74 c.6)",
-#	'RF11':"Agenzie di viaggi e turismo (art.74-ter)",
-#	'RF12':"Agriturismo (art.5 c.2, L.413/1991)",
-#	'RF13':"Vendite a domicilio (art.25-bis c.6, DPR 600/1973)",
-#	'RF14':"Rivendita di beni usati, di oggetti	d’arte, d’antiquariato o da collezione (art.36, DL 41/1995)",
-#	'RF15':"Agenzie di vendite all’asta di oggetti d’arte, antiquariato o da collezione (art.40-bis, DL 41/1995)",
-#	'RF16':"IVA per cassa P.A. (art.6 c.5)",
-#	'RF17':"IVA per cassa (art.32-bis, DL 83/2012)",
-#	'RF19':"Regime forfettario",
-#	'RF18':"Altro"
+#	'RF05':,
+#	'RF06':,
+#	'RF07':,
+#	'RF08':,
+#	'RF09':,
+#	'RF10':,
+#	'RF11':,
+#	'RF12':,
+#	'RF13':,
+#	'RF14':,
+#	'RF15':,
+#	'RF16':,
+#	'RF17':,
+#	'RF19':,
+#	'RF18':
 #}
 CondizioniPagamento_t = {	'TP01':"pagamento a rate", 'TP02':"pagamento completo", 'TP03':"anticipo"	}
 ModalitaPagamento_t = {
