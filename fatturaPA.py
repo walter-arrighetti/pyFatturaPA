@@ -4,9 +4,8 @@
 #--------------------------------------------------------#
 #   Quick generation of FatturaPA eInvoice XML files !   #
 #--------------------------------------------------------#
-#    Copyright (C) 2019 Walter Arrighetti, PhD, CISSP    #
-#    All Rights Reserved.                                #
-#    coding by: Walter Arrighetti                        #
+#    Released under GNU General Public License 3.0       #
+#    coding by: Walter Arrighetti, PhD, CISSP            #
 #               <walter.arrighetti@agid.gov.it>          #
 #  < https://github.com/walter-arrighetti/pyFatturaPA >  #
 #                                                        #
@@ -717,7 +716,7 @@ def main():
 		print('\n')
 		sys.exit(9)
 	print("%s %s - Genera rapidamente fatture elettroniche semplici in XML nel formato FatturaPA."%(sys.argv[0].upper(),__VERSION))
-	print("Copytight (C) 2019 Walter Arrighetti  <walter.arrighetti@agid.gov.it>\n")
+	print("GNU (GPL) 2019 Walter Arrighetti  <walter.arrighetti@agid.gov.it>\n")
 	[PROVINCES.extend(list(prov.keys())) for prov in REGIONS.values()]
 	if len(sys.argv) != 2:	print_args()
 	elif sys.argv[1].lower()=="consulenza":	issue_consultancy()
