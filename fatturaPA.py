@@ -1,6 +1,6 @@
 # coding=utf-8
 ##########################################################
-#  pyFatturaPA 0.3                                       #
+#  pyFatturaPA 0.4                                       #
 #--------------------------------------------------------#
 #   Quick generation of FatturaPA eInvoice XML files !   #
 #--------------------------------------------------------#
@@ -17,7 +17,7 @@ import json
 import sys
 import re
 
-__VERSION = "0.3"
+__VERSION = "0.4"
 CONF_FILE = "pyFatturaPA.conf"
 VAT_DEFAULT = 22.0
 
@@ -290,11 +290,11 @@ def FatturaPA_assemble(user, client, data):
 		if 'period' in line.keys():	F.extend([
 			'\t\t\t\t<DataInizioPeriodo>%s</DataInzioPeriodo>'%line['period'][0].strftime("%Y-%m-%d"),
 			'\t\t\t\t<DataFinePeriodo>%s</DataFinePeriodo>'%line['period'][1].strftime("%Y-%m-%d")])
-		F.append('\t\t\t\t<PrezzoUnitario>%.02f</PrezzoUnitario>'%line['price'])
 		if 'Qty' in line.keys():
-			F.append('\t\t\t\t\t<Quantita>%.02f</Quantita>'%line['Qty'])
-			if 'unit' in line.keys():	F.append('\t\t\t\t\t<UnitaMisura>%s</UnitaMisura>'%line['unit'])
+			F.append('\t\t\t\t<Quantita>%.02f</Quantita>'%line['Qty'])
+			if 'unit' in line.keys():	F.append('\t\t\t\t<UnitaMisura>%s</UnitaMisura>'%line['unit'])
 		F.extend([
+			'\t\t\t\t<PrezzoUnitario>%.02f</PrezzoUnitario>'%line['price'],
 			'\t\t\t\t<PrezzoTotale>%.02f</PrezzoTotale>'%line['total'],
 			'\t\t\t\t<AliquotaIVA>%.02f</AliquotaIVA>'%data['total']['aliquota']
 			])
@@ -351,8 +351,101 @@ def _enum_selection(enumtype, enumname=None, default=None):
 	return keys[eval(answ)-1]
 
 
-def issue_consultancy():	pass
-
+def issue_consultancy():
+	user, clients = parse_config()
+	data = {}
+	if not user:
+		print(" * ERRORE!: Database senza dati personali, ovvero il file \"%s\" deve trovarsi nella stessa cartella di \"%s\"."%(CONF_FILE,sys.argv[0]))
+		sys.exit(-3)
+	if not clients:
+		print(" * ERRORE!: Database dei clienti vuoto. Deve essere inserito almeno un cliente tramite l'argomento 'fornitore'.")
+		sys.exit(-4)
+	org = input("Inserire la sigla identificativa (3 caratteri) del cliente nel database:  ").upper()
+	if org not in clients.keys():
+		print(" * ERRORE!: Cliente '%s' non trovato nel database."%org)
+		sys.exit(-5)
+	client = clients[org];	del clients
+	data['FormatoTrasmissione'], data['TipoDocumento'], data['ProgressivoInvio'] = 'FPR12', 'TD01', None
+	data['Divisa'], data['EsigibilitaIVA'], data['pagamento'] = "EUR", 'I', {	'Condizioni':'TP02', 'mod':'MP05'	}
+	while not data['ProgressivoInvio']:
+		data['ProgressivoInvio'] = input("Inserire il numero identificativo (progressivo) della fattura:  ")
+	data['num'] = data['ProgressivoInvio']
+	data['Data'] = None
+	while True:
+		datetmp = input("Data fatturazione nel formato GG-MM-AAAA (per oggi premere [Invio]):  ")
+		if not datetmp:
+			data['Data'] = datetime.date.today()
+			break
+		else:
+			try:
+				data['Data'] = datetime.datetime.strptime(datetmp,"%d-%m-%Y")
+				break
+			except:	pass
+	answ = input("Se applicabile, indicare numero d'Ordine richiesto dal cessionario/committente, ovvero premere [Invio]:  ")
+	if answ:	data['ref'] = { 'Id':answ	}
+	while True:
+		aliquotaIVA = input("Aliquota IVA (default: %d%%; indicare \"0\" se non applcabile):  "%user['cassa']['IVA'])
+		if not aliquotaIVA:	aliquotaIVA = VAT_DEFAULT;	break
+		elif aliquotaIVA.isnumeric():	aliquotaIVA = eval(aliquotaIVA);	break
+	data['total'] = {	'aliquota':aliquotaIVA, 'subtotale':0., 'imponibile':0.	}
+	answ = None
+	data['causale'] = input("Causale dell'intera fattura (max. 400 caratteri):  ")[:400]
+	if not data['causale']:	del data['causale']
+	data['#'], l, = [], 1
+	while True:
+		print("\nVOCE #%d DELLA FATTURA."%l)
+		while True:
+			vocestr = "Prezzo unitario della voce #%d"%l
+			if l > 1:	vocestr += " ([Invio] se le voci fattura sono terminate)"
+			vocestr += ":  "
+			pricetmp = input(vocestr)
+			if pricetmp and pricetmp.isnumeric():
+				price = eval(pricetmp);	break
+			elif not pricetmp and l>1:	break
+		if not pricetmp:	l -= 1;	break
+		qty, vat = None, None
+		while True:
+			qtytmp = input("Quantità della voce #%d  [default: 1]:  "%l)
+			if qtytmp and qtytmp.isnumeric():
+				qty = eval(qtytmp)
+				if qty <= 0:	qty = None
+				break
+			elif not qtytmp:	break
+		if qty:
+			total = price * qty
+			unit = input("Unità di misura della voce #%d (premere [Invio] per nessuna):  "%l)
+		else:	total, unit = price, None
+		data['total']['subtotale'] += total
+		descr = input("Descrizione della voce #%d:  "%l)[:1000]
+		line = {'linea':l,	'price':price, 'total':total, 'descr':descr	}
+		if qty:
+			line['Qty'] = qty
+			if unit:	line['unit'] = unit
+		if not descr:	del line['descr']
+		data['#'].append( line )
+		del price, vat, qty, total, descr
+		l += 1
+	if not data['#']:
+		print(" * ERROR!: Non sono state inserite voci nella fattura (è necessaria almeno una voce).")
+		sys.exit(-6)
+	subtotale = data['total']['subtotale']
+	if 'cassa' in user.keys():
+		data['total']['cassa'] = subtotale * (user['cassa']['aliquota']/100)
+	else:	data['total']['imposta'] = 0
+	data['cassa'] = {	'importo':data['total']['cassa'], 'imponibile':subtotale, 'aliquota':user['cassa']['aliquota']	}
+	subtotale += data['cassa']['importo']
+	data['total']['imponibile'] = subtotale
+	if 'ritenuta' in user.keys():
+		data['total']['ritenuta'] = -1 * subtotale * (user['ritenuta']['aliquota']/100)	# = user['ritenuta']['importo']
+	else:	data['total']['ritenuta'] = 0
+	data['ritenuta'] = {	'importo':data['total']['ritenuta'], 'imponibile':subtotale, 'aliquota':user['ritenuta']['aliquota']	}
+	subtotale += data['total']['ritenuta']
+	data['total']['imposta'] = data['total']['imponibile'] * (data['total']['aliquota']/100)
+	subtotale += data['total']['imposta']
+	data['total']['TOTALE'] = max(0,subtotale)
+	if 'pagamento' in data.keys():
+		data['pagamento']['importo'] = data['total']['TOTALE']
+	return FatturaPA_assemble(user, client, data)
 
 def issue_invoice():
 	user, clients = parse_config()
