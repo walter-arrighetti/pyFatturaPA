@@ -17,7 +17,7 @@ import sys
 import re
 
 __VERSION = "0.5"
-CONF_FILE = "pyFatturaPA.conf"
+CONF_FILE = "pyFatturaPA.conf.json"
 VAT_DEFAULT = 22.0
 
 
