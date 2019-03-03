@@ -1,6 +1,6 @@
 # pyFatturaPA
 Tool for quick, command-line generation of simple e-Invoice compatible with the Italian-standard, [FatturaPA](https://www.fatturapa.gov.it).
-
+<img src="opt/pyFatturaPA_icon.png" />
 This is a typical, lazy sunday afternoon exercise, aimed at self-generating e-invoices to private companies as an individual freelance consultant.
 ***DISCLAIMER***: The author denies any responsibilities, either explicit or implied, on possible damages and liabilities derived or implied by the use of this software tool. In particular, no assumption of validity or compatibility on the software deliverables must be assumed. Also, the software is supplied *as is* (in GNU GPL terminology).
 
