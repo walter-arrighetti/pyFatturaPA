@@ -22,14 +22,14 @@ pyFatturaPA   consulenza | emetti | committente | inizializza
 ```
 Il tool effettua quattro possibili operazioni:
 
- `inizializza` inizializza il database JSON (`pyFatturaPA.json`) creandone uno vuoto e inserendovi *una tantum* le sole informazioni del cedente/prestatore, dalle quali viene anche determinato se è soggetto a vati tipi di casse o ritenute.
+ `inizializza` inizializza il database  (`pyFatturaPA.conf.json`) creandone uno vuoto e inserendovi *una tantum* le sole informazioni del cedente/prestatore, dalle quali viene anche determinato se è soggetto a vati tipi di casse o ritenute.
  
- `committente` permette di aggiungere al database JSON dei fornitori/committenti un'ulteriore voce, che sarà poi indicizzata mediante codice a 3 cifre alfanumeriche. Non è attualmente possibile rimuovere un cessionario/committente.
+ `committente` permette di aggiungere al database dei fornitori/committenti un'ulteriore voce, che sarà poi indicizzata mediante codice a 3 cifre alfanumeriche. Non è attualmente possibile rimuovere un cessionario/committente.
  
  `emetti` genera una singola fattura con opzioni piuttosto complete; sono infatti supportate diverse tipologie di fattura/ritenuta/nota, esigibilità, aliquota, condizioni e modalità di pagamento, nonché causali, quantità e unità di misura per voci multiple nella fatturazione. Sono supportate fatture elettroniche verso paesi UE ed extra UE. L'eventuale IBAN ove pagare la fatturazione (in caso di pagamenti tramite bonifico) può essere preso automaticamente dalle informazioni del cedente/prestatore (nel database JSON), immesso manualmente, ovvero omesso.
  
  `consulenza` è una versione specializzata del precedente; crea ancor più rapidamente una singola fattura, relativa ad una prestazione senza alcuna cessazione/trasferimento di beni, da parte di un professionista soggetto ad IVA (22%), alla cassa INPS (4%) e a ritenuta d'acconto (-20%). La generazione della fattura elettronica avviene inserendo solamente i **6** campi generici (*obbligatori* se in corsivo):
-  * *sigla identificativa del committente* (3 caratteri, così come indicata nel database JSON dei committenti/cessionari),
+  * *sigla identificativa del committente* (3 caratteri, così come indicata nel database dei committenti/cessionari),
   * *numero identificativo progressivo della fattura*,
   * numero d'ordine del committente cui la fattura fa riferimento,
   * giorni ammessi per il pagamento dall'emissione,
