@@ -10,7 +10,7 @@ It is a rudimetary command-line generator of XML e-invoices to be later electron
 Due to the validity of such e-invoicing standard being limited to Italian finance, the README continues in Italian.
 
 ### Descrizione
-Questo tool viene inizialmente impiegato per costituire un database in JSON contenente un elenco essenziale di committenti (ove sono registrate le loro informazioni fiscali quali P.IVA, indirizzo PEC, C.F., ecc.). Il database, chiamato `pyFatturaPA.json`, deve trovarsi nella medesima cartella del tool, così come si consiglia di eseguirlo da tale cartella.
+Questo tool viene inizialmente impiegato per costituire un database contenente un elenco essenziale di committenti (ove sono registrate le loro informazioni fiscali quali P.IVA, indirizzo PEC, C.F., ecc.). Il database, chiamato `pyFatturaPA.conf.json`, deve trovarsi nella medesima cartella del tool, così come si consiglia di eseguirlo da tale cartella.
 
 Sempre mediante lo stesso (cfr. sezione **Sintassi**), si possono generare singole fatture elettroniche in formato XML che rispettano lo standard [*FatturaPA* 1.2.1](https://www.fatturapa.gov.it/export/fatturazione/it/normativa/f-2.htm). La sintassi del nome del file generato è `IT`*`numPartitaIVA`*`_`*`numFattura`*`.xml`, cioè combinando il numero di P.IVA emettente e l'identificativo univoco di quella fattura elettronica specifica.
 
