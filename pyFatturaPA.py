@@ -124,7 +124,7 @@ def write_config(user, clients, append):
 
 
 
-def	add_company():
+def add_company():
 	if not os.path.exists(CONF_FILE):
 		print("ERROR!: Il file di configurazione di pyFatturaPA (%s) non è stato trovato. L'utente va prima inizializzato."%CONF_FILE)
 		sys.exit(-2)
