@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 ##########################################################
-#  pyFatturaPA 1.21                                      #
+#  pyFatturaPA 1.22                                      #
 #--------------------------------------------------------#
 #   Quick generation of FatturaPA eInvoice XML files !   #
 #--------------------------------------------------------#
@@ -17,7 +17,7 @@ import json
 import sys
 import re
 
-__VERSION = "1.21"
+__VERSION = "1.22"
 CONF_FILE = "pyFatturaPA.conf.json"
 VAT_DEFAULT = 22.0
 
@@ -98,7 +98,7 @@ def enter_org_data():
 
 
 def parse_config():
-	clients = json.load(open(CONF_FILE,"r"))
+	try:	clients = json.load(open(CONF_FILE,"r"))
 	except:	return False, False
 	if "USER" not in clients.keys():	return False, False
 	USER = clients["USER"]
