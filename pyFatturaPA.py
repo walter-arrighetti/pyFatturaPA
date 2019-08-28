@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 ##########################################################
-#  pyFatturaPA 1.2                                       #
+#  pyFatturaPA 1.21                                      #
 #--------------------------------------------------------#
 #   Quick generation of FatturaPA eInvoice XML files !   #
 #--------------------------------------------------------#
@@ -17,7 +17,7 @@ import json
 import sys
 import re
 
-__VERSION = "1.2"
+__VERSION = "1.21"
 CONF_FILE = "pyFatturaPA.conf.json"
 VAT_DEFAULT = 22.0
 
